@@ -310,7 +310,21 @@ def step_llm_provider() -> dict:
             print(f"\n  Model: {model}")
         else:
             print(f"\n  Available models:")
-            model_idx = prompt_choice(selected["models"], "Which model?", default=0)
+            # Add descriptions to model names for clarity
+            model_labels = []
+            for m in selected["models"]:
+                if "gemma3:12b" in m:
+                    label = f"{m} (recommended, best quality)"
+                elif "gemma3:" in m or "mistral" in m or "neural-chat" in m:
+                    label = f"{m} (good balance)"
+                elif ":0.5b" in m or ":1b" in m or ":2b" in m or "nano" in m:
+                    label = f"{m} (fast, lower quality)"
+                elif "llava" in m:
+                    label = f"{m} (vision model, not ideal for ranking)"
+                else:
+                    label = m
+                model_labels.append(label)
+            model_idx = prompt_choice(model_labels, "Which model?", default=0)
             model = selected["models"][model_idx]
 
     # If API provider selected but no key, prompt for it
