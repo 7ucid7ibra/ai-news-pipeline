@@ -527,9 +527,12 @@ def step_telegram_voice() -> dict:
     voice_tone = ""
 
     if telegram_enabled:
-        print(f"\n  {DIM}You'll need:1. Telegram Bot Token (create via @BotFather on Telegram)
-2. Your Telegram Chat ID (send /start to your bot to get it)
-3. ElevenLabs API Key (free tier available at elevenlabs.io){RESET}")
+        print(
+            f"\n  {DIM}You'll need:\n"
+            "1. Telegram Bot Token (create via @BotFather on Telegram)\n"
+            "2. Your Telegram Chat ID (send /start to your bot to get it)\n"
+            f"3. ElevenLabs API Key (free tier available at elevenlabs.io){RESET}"
+        )
 
         chat_id_input = prompt_input("\n  Your Telegram Chat ID")
         if chat_id_input:
