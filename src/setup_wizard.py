@@ -203,7 +203,7 @@ def detect_llm_providers() -> list[dict]:
 # Wizard steps
 # ---------------------------------------------------------------------------
 
-TOTAL_STEPS = 9
+TOTAL_STEPS = 10
 
 
 def step_check_deps() -> dict:
@@ -499,9 +499,61 @@ def step_agent() -> dict:
         return {"agent": "", "tool_testing": False}
 
 
+def step_run_speed() -> dict:
+    """Step 6: Choose runtime profile for faster or deeper runs."""
+    heading(6, TOTAL_STEPS, "Run Speed")
+
+    profiles = [
+        {
+            "key": "fast",
+            "label": "Fast (development)",
+            "desc": "Quick iteration: fewer scraped items, 2 tool tests, 90s timeout.",
+            "overrides": {
+                "ranking": {"max_tools_to_test": 2},
+                "testing": {"timeout_seconds": 90},
+                "sources": {
+                    "hackernews": {"limit": 20},
+                    "reddit": {"limit": 20},
+                    "youtube": {"max_per_channel": 2},
+                },
+            },
+        },
+        {
+            "key": "balanced",
+            "label": "Balanced",
+            "desc": "Good default: moderate coverage, 5 tool tests, 180s timeout.",
+            "overrides": {
+                "ranking": {"max_tools_to_test": 5},
+                "testing": {"timeout_seconds": 180},
+                "sources": {
+                    "hackernews": {"limit": 25},
+                    "reddit": {"limit": 35},
+                    "youtube": {"max_per_channel": 3},
+                },
+            },
+        },
+        {
+            "key": "full",
+            "label": "Full (thorough)",
+            "desc": "Maximum coverage and testing depth (slowest).",
+            "overrides": {},
+        },
+    ]
+
+    options = [f"{p['label']} — {p['desc']}" for p in profiles]
+    choice = prompt_choice(options, "Choose runtime profile", default=0)
+    selected = profiles[choice]
+
+    print(f"\n  {CHECK} Runtime profile: {selected['label']}")
+    return {
+        "runtime_profile": selected["key"],
+        "runtime_overrides": selected["overrides"],
+    }
+
+
 def step_distribution() -> dict:
-    """Step 6: Distribution options."""
-    heading(6, TOTAL_STEPS, "Distribution")
+    """Step 7: Distribution options."""
+    heading(7, TOTAL_STEPS, "Distribution")
 
     obsidian_vault = ""
     if prompt_yn("Save digests to an Obsidian vault?", default=False):
@@ -518,8 +570,8 @@ def step_distribution() -> dict:
 
 
 def step_telegram_voice() -> dict:
-    """Step 7: Telegram voice memo (optional)."""
-    heading(7, TOTAL_STEPS, "Telegram Voice Memo (Optional)")
+    """Step 8: Telegram voice memo (optional)."""
+    heading(8, TOTAL_STEPS, "Telegram Voice Memo (Optional)")
 
     telegram_enabled = prompt_yn("Receive daily digest as a voice memo via Telegram?", default=False)
 
@@ -580,8 +632,8 @@ def step_telegram_voice() -> dict:
 
 
 def step_schedule() -> dict:
-    """Step 8: Schedule setup."""
-    heading(8, TOTAL_STEPS, "Schedule")
+    """Step 9: Schedule setup."""
+    heading(9, TOTAL_STEPS, "Schedule")
 
     schedule_time = prompt_time("Run the pipeline daily at what time?", default="06:00")
 
@@ -614,8 +666,8 @@ def step_schedule() -> dict:
 
 
 def step_generate_config(data: dict) -> None:
-    """Step 9: Generate config.yaml and .env."""
-    heading(9, TOTAL_STEPS, "Saving Configuration")
+    """Step 10: Generate config.yaml and .env."""
+    heading(10, TOTAL_STEPS, "Saving Configuration")
 
     import yaml
 
@@ -641,6 +693,11 @@ def step_generate_config(data: dict) -> None:
         if key not in enabled and key in config.get("sources", {}):
             del config["sources"][key]
 
+    # Runtime profile overrides (fast/balanced/full)
+    runtime_profile = data.get("runtime_profile", "balanced")
+    runtime_overrides = data.get("runtime_overrides", {})
+    _apply_runtime_overrides(config, runtime_overrides)
+
     # Distribution
     config.setdefault("distribution", {})["obsidian_vault"] = data.get("obsidian_vault", "")
     config.setdefault("distribution", {})["github_repo"] = data.get("github_repo", "")
@@ -660,6 +717,7 @@ def step_generate_config(data: dict) -> None:
     CONFIG_PATH.write_text(header + yaml.dump(config, default_flow_style=False, sort_keys=False))
     source_count = len(enabled) if enabled else len(all_source_keys)
     print(f"  {CHECK} Wrote config.yaml ({source_count} sources, provider: {provider or 'auto'})")
+    print(f"  {CHECK} Applied runtime profile: {runtime_profile}")
 
     # Update scheduler run.sh if tool testing is enabled
     if data.get("tool_testing"):
@@ -722,6 +780,36 @@ def _write_env(api_keys: dict[str, str]) -> None:
             existing_lines.append(f"{key}={value}")
 
     ENV_PATH.write_text("\n".join(existing_lines) + "\n")
+
+
+def _merge_dict(target: dict, patch: dict) -> None:
+    """Recursively merge patch keys into target."""
+    for key, value in patch.items():
+        if isinstance(value, dict) and isinstance(target.get(key), dict):
+            _merge_dict(target[key], value)
+        else:
+            target[key] = value
+
+
+def _apply_runtime_overrides(config: dict, overrides: dict) -> None:
+    """Apply runtime profile overrides without re-adding disabled sources."""
+    if not overrides:
+        return
+
+    for section, value in overrides.items():
+        if section == "sources" and isinstance(value, dict):
+            config.setdefault("sources", {})
+            for source_key, source_override in value.items():
+                # Only patch sources that are enabled/present in config.
+                if source_key in config["sources"] and isinstance(source_override, dict):
+                    _merge_dict(config["sources"][source_key], source_override)
+            continue
+
+        if isinstance(value, dict):
+            config.setdefault(section, {})
+            _merge_dict(config[section], value)
+        else:
+            config[section] = value
 
 
 def _update_run_sh(tool_testing: bool) -> None:
@@ -794,6 +882,7 @@ def run_wizard() -> None:
         data.update(step_llm_provider())
         data.update(step_sources())
         data.update(step_agent())
+        data.update(step_run_speed())
         data.update(step_distribution())
         data.update(step_telegram_voice())
         data.update(step_schedule())

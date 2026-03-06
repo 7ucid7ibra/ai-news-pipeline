@@ -31,7 +31,7 @@ from src.distribute.claude_config import install_approved_tools
 from src.distribute.digest_generator import generate_digest, save_digest
 from src.distribute.github_publisher import publish_to_github
 from src.distribute.obsidian import save_to_obsidian
-from src.distribute.telegram_voice import generate_voice_memo, send_telegram_memo, save_transcript
+from src.distribute.telegram_voice import generate_voice_memo, save_transcript, send_telegram_memo, send_telegram_text
 from src.models import NewsItem, RankedItem, TestResult
 from src.pipeline.aggregator import aggregate
 from src.pipeline.ranker import rank_basic, rank_with_llm, save_ranked
@@ -148,25 +148,42 @@ def distribute(
     # 5. Send Telegram voice memo (if configured)
     telegram_enabled = config.get("distribution", {}).get("telegram_enabled", False)
     if telegram_enabled:
-        try:
-            telegram_chat_ids = config.get("distribution", {}).get("telegram_chat_ids", [])
-            voice_tone = config.get("distribution", {}).get("telegram_voice_tone", "conversational")
-            bot_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+        telegram_chat_ids = config.get("distribution", {}).get("telegram_chat_ids", [])
+        bot_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+        summary_text = _build_telegram_text_fallback(ranked, test_results, run_date)
 
-            if not bot_token:
-                logger.warning("TELEGRAM_BOT_TOKEN not set. Skipping voice memo.")
-            elif not telegram_chat_ids:
-                logger.warning("No Telegram chat IDs configured. Skipping voice memo.")
+        if not bot_token:
+            logger.warning("TELEGRAM_BOT_TOKEN not set. Skipping Telegram distribution.")
+            return
+        if not telegram_chat_ids:
+            logger.warning("No Telegram chat IDs configured. Skipping Telegram distribution.")
+            return
+
+        voice_sent = False
+        try:
+            voice_tone = config.get("distribution", {}).get("telegram_voice_tone", "conversational")
+
+            # Generate voice memo
+            audio_bytes, transcript = generate_voice_memo(ranked, test_results, voice_tone)
+            # Save transcript
+            save_transcript(transcript, run_date)
+            # Send via Telegram
+            if send_telegram_memo(audio_bytes, transcript, bot_token, telegram_chat_ids, run_date):
+                voice_sent = True
+                logger.info("Telegram voice memo sent successfully")
             else:
-                # Generate voice memo
-                audio_bytes, transcript = generate_voice_memo(ranked, test_results, voice_tone)
-                # Save transcript
-                save_transcript(transcript, run_date)
-                # Send via Telegram
-                if send_telegram_memo(audio_bytes, transcript, bot_token, telegram_chat_ids, run_date):
-                    logger.info("Telegram voice memo sent successfully")
+                logger.warning("Voice memo send failed; sending Telegram text summary only.")
         except Exception as e:
             logger.exception(f"Failed to send Telegram voice memo: {e}")
+
+        # Always send text summary (voice + text on success, text-only on voice failure)
+        if send_telegram_text(summary_text, bot_token, telegram_chat_ids, run_date):
+            if voice_sent:
+                logger.info("Telegram text summary sent successfully")
+            else:
+                logger.info("Telegram text summary sent (voice unavailable)")
+        else:
+            logger.warning("Failed to send Telegram text summary.")
 
 
 def print_results(ranked: list[RankedItem]) -> None:
@@ -184,6 +201,30 @@ def print_results(ranked: list[RankedItem]) -> None:
             print(f"    Reason: {item.reasoning}")
 
     print("\n" + "=" * 70 + "\n")
+
+
+def _build_telegram_text_fallback(
+    ranked: list[RankedItem],
+    test_results: list[TestResult] | None,
+    run_date: date,
+    top_n: int = 8,
+) -> str:
+    """Build a compact text digest for Telegram fallback delivery."""
+    lines = [f"AI News Digest — {run_date}", ""]
+
+    passed_count = 0
+    if test_results:
+        passed_count = sum(1 for r in test_results if r.verdict.value == "pass")
+    if test_results is not None:
+        lines.append(f"Tested tools: {len(test_results)} | Passed: {passed_count}")
+        lines.append("")
+
+    lines.append("Top stories:")
+    for idx, r in enumerate(ranked[:top_n], 1):
+        lines.append(f"{idx}. {r.item.title} ({r.total_score}/40)")
+        lines.append(r.item.url)
+
+    return "\n".join(lines)
 
 
 def main():

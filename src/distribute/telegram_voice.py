@@ -120,6 +120,42 @@ def send_telegram_memo(
     return success_count > 0
 
 
+def send_telegram_text(
+    text: str,
+    bot_token: str,
+    chat_ids: list[str],
+    run_date: date | None = None,
+) -> bool:
+    """Send a plain text digest message to Telegram chats."""
+    if not text or not bot_token or not chat_ids:
+        logger.warning("Missing text, bot token, or chat IDs for Telegram")
+        return False
+
+    run_date = run_date or date.today()
+    max_len = 4000  # Telegram message limit is 4096 chars
+    message = text[:max_len]
+
+    success_count = 0
+    for chat_id in chat_ids:
+        try:
+            url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+            data = {
+                "chat_id": chat_id,
+                "text": message,
+                "disable_web_page_preview": True,
+            }
+            response = requests.post(url, data=data, timeout=20)
+            if response.status_code == 200:
+                logger.info(f"Sent text digest to Telegram chat: {chat_id} ({run_date})")
+                success_count += 1
+            else:
+                logger.error(f"Telegram API text error: {response.status_code} — {response.text[:200]}")
+        except Exception as e:
+            logger.exception(f"Failed to send text digest to Telegram chat {chat_id}: {e}")
+
+    return success_count > 0
+
+
 def _text_to_speech(text: str, voice_tone: str) -> bytes:
     """Convert text to speech using ElevenLabs API.
 
