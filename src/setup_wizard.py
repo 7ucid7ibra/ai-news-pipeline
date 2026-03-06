@@ -525,29 +525,57 @@ def step_telegram_voice() -> dict:
 
     telegram_chat_ids = []
     voice_tone = ""
+    telegram_creds: dict[str, str] = {}
 
     if telegram_enabled:
         print(
             f"\n  {DIM}You'll need:\n"
             "1. Telegram Bot Token (create via @BotFather on Telegram)\n"
             "2. Your Telegram Chat ID (send /start to your bot to get it)\n"
-            f"3. ElevenLabs API Key (free tier available at elevenlabs.io){RESET}"
+            f"3. ElevenLabs API Key and Voice ID (from elevenlabs.io){RESET}"
         )
+
+        existing_bot_token = _read_env_key("TELEGRAM_BOT_TOKEN")
+        existing_elevenlabs_key = _read_env_key("ELEVENLABS_API_KEY")
+        existing_voice_id = _read_env_key("ELEVENLABS_VOICE_ID")
+
+        bot_token = prompt_input("\n  Telegram Bot Token", default=existing_bot_token)
+        if bot_token:
+            telegram_creds["TELEGRAM_BOT_TOKEN"] = bot_token
 
         chat_id_input = prompt_input("\n  Your Telegram Chat ID")
         if chat_id_input:
             telegram_chat_ids = [chat_id_input]
             print(f"  {DIM}(You can add more chat IDs later in config.yaml){RESET}")
 
+        elevenlabs_key = prompt_input("\n  ElevenLabs API Key", default=existing_elevenlabs_key)
+        if elevenlabs_key:
+            telegram_creds["ELEVENLABS_API_KEY"] = elevenlabs_key
+
+        voice_id = prompt_input("\n  ElevenLabs Voice ID", default=existing_voice_id)
+        if voice_id:
+            telegram_creds["ELEVENLABS_VOICE_ID"] = voice_id
+
         voice_tone = prompt_input(
             "\n  Voice tone/style (e.g., 'casual tech bro', 'professional analyst')",
             default="conversational tech enthusiast",
         )
 
+        missing = [
+            key for key in ("TELEGRAM_BOT_TOKEN", "ELEVENLABS_API_KEY", "ELEVENLABS_VOICE_ID")
+            if key not in telegram_creds
+        ]
+        if missing:
+            print(
+                f"  {WARN} Missing credentials: {', '.join(missing)}. "
+                "Voice memo is enabled, but sending may fail until these are set in .env."
+            )
+
     return {
         "telegram_enabled": telegram_enabled,
         "telegram_chat_ids": telegram_chat_ids,
         "voice_tone": voice_tone,
+        "telegram_creds": telegram_creds,
     }
 
 
@@ -642,6 +670,7 @@ def step_generate_config(data: dict) -> None:
     api_keys: dict[str, str] = {}
     api_keys.update(data.get("api_keys", {}))
     api_keys.update(data.get("reddit_creds", {}))
+    api_keys.update(data.get("telegram_creds", {}))
 
     # Write .env
     if api_keys:
@@ -701,18 +730,13 @@ def _update_run_sh(tool_testing: bool) -> None:
     if not run_sh.exists():
         return
     content = run_sh.read_text()
-    if tool_testing:
-        # Remove --digest flag so tool testing runs
-        content = content.replace(
-            'exec "$PROJECT_DIR/.venv/bin/python" "$PROJECT_DIR/run_pipeline.py" \\\n    --digest \\\n    --llm',
-            'exec "$PROJECT_DIR/.venv/bin/python" "$PROJECT_DIR/run_pipeline.py" \\\n    --llm',
-        )
-    else:
-        # Ensure --digest is present (skip tool testing)
-        content = content.replace(
-            'exec "$PROJECT_DIR/.venv/bin/python" "$PROJECT_DIR/run_pipeline.py" \\\n    --llm',
-            'exec "$PROJECT_DIR/.venv/bin/python" "$PROJECT_DIR/run_pipeline.py" \\\n    --digest \\\n    --llm',
-        )
+    has_digest_flag = "--digest \\" in content
+    if tool_testing and has_digest_flag:
+        # Remove --digest flag so tool testing runs.
+        content = content.replace("    --digest \\\n", "")
+    elif not tool_testing and not has_digest_flag:
+        # Ensure --digest is present (skip tool testing).
+        content = content.replace('    --llm \\\n', '    --digest \\\n    --llm \\\n')
     run_sh.write_text(content)
 
 
