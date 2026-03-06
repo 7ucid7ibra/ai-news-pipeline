@@ -18,15 +18,20 @@ if [ -f "$PROJECT_DIR/.env" ]; then
 fi
 
 # Run the pipeline
-exec "$PROJECT_DIR/.venv/bin/python" "$PROJECT_DIR/run_pipeline.py" \
+if "$PROJECT_DIR/.venv/bin/python" "$PROJECT_DIR/run_pipeline.py" \
     --digest \
     --llm \
-    2>&1
+    2>&1; then
+    RESULT=0
+else
+    RESULT=$?
+fi
 
 # Send macOS notification on completion
-RESULT=$?
 if [ $RESULT -eq 0 ]; then
     osascript -e 'display notification "Daily AI digest ready!" with title "AI News Pipeline" sound name "Glass"' 2>/dev/null || true
 else
     osascript -e 'display notification "Pipeline failed — check logs" with title "AI News Pipeline" sound name "Basso"' 2>/dev/null || true
 fi
+
+exit $RESULT
