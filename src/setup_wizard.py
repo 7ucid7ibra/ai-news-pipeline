@@ -508,7 +508,7 @@ def step_distribution() -> dict:
         obsidian_vault = prompt_input("  Vault path", default="~/Documents/Obsidian")
         obsidian_vault = str(Path(obsidian_vault).expanduser())
         if not Path(obsidian_vault).exists():
-            print(f"  {WARN} Path doesn't exist yet (will be created on first run).")
+            print(f"  {WARN} Path doesn't exist. Open Obsidian and create your vault at that path first.")
 
     github_repo = ""
     if prompt_yn("Publish digests to a GitHub repo?", default=False):

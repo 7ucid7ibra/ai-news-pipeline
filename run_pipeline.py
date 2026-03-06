@@ -207,6 +207,7 @@ def main():
     if not Path("config.yaml").exists() and not args.no_setup:
         from src.setup_wizard import run_wizard
         run_wizard()
+        return  # Don't auto-run pipeline after first-time setup
 
     run_date = date.fromisoformat(args.date) if args.date else date.today()
 
