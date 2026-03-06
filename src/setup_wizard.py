@@ -203,7 +203,7 @@ def detect_llm_providers() -> list[dict]:
 # Wizard steps
 # ---------------------------------------------------------------------------
 
-TOTAL_STEPS = 8
+TOTAL_STEPS = 9
 
 
 def step_check_deps() -> dict:
@@ -517,9 +517,40 @@ def step_distribution() -> dict:
     return {"obsidian_vault": obsidian_vault, "github_repo": github_repo}
 
 
+def step_telegram_voice() -> dict:
+    """Step 7: Telegram voice memo (optional)."""
+    heading(7, TOTAL_STEPS, "Telegram Voice Memo (Optional)")
+
+    telegram_enabled = prompt_yn("Receive daily digest as a voice memo via Telegram?", default=False)
+
+    telegram_chat_ids = []
+    voice_tone = ""
+
+    if telegram_enabled:
+        print(f"\n  {DIM}You'll need:1. Telegram Bot Token (create via @BotFather on Telegram)
+2. Your Telegram Chat ID (send /start to your bot to get it)
+3. ElevenLabs API Key (free tier available at elevenlabs.io){RESET}")
+
+        chat_id_input = prompt_input("\n  Your Telegram Chat ID")
+        if chat_id_input:
+            telegram_chat_ids = [chat_id_input]
+            print(f"  {DIM}(You can add more chat IDs later in config.yaml){RESET}")
+
+        voice_tone = prompt_input(
+            "\n  Voice tone/style (e.g., 'casual tech bro', 'professional analyst')",
+            default="conversational tech enthusiast",
+        )
+
+    return {
+        "telegram_enabled": telegram_enabled,
+        "telegram_chat_ids": telegram_chat_ids,
+        "voice_tone": voice_tone,
+    }
+
+
 def step_schedule() -> dict:
-    """Step 7: Schedule setup."""
-    heading(7, TOTAL_STEPS, "Schedule")
+    """Step 8: Schedule setup."""
+    heading(8, TOTAL_STEPS, "Schedule")
 
     schedule_time = prompt_time("Run the pipeline daily at what time?", default="06:00")
 
@@ -552,8 +583,8 @@ def step_schedule() -> dict:
 
 
 def step_generate_config(data: dict) -> None:
-    """Step 8: Generate config.yaml and .env."""
-    heading(8, TOTAL_STEPS, "Saving Configuration")
+    """Step 9: Generate config.yaml and .env."""
+    heading(9, TOTAL_STEPS, "Saving Configuration")
 
     import yaml
 
@@ -582,6 +613,11 @@ def step_generate_config(data: dict) -> None:
     # Distribution
     config.setdefault("distribution", {})["obsidian_vault"] = data.get("obsidian_vault", "")
     config.setdefault("distribution", {})["github_repo"] = data.get("github_repo", "")
+
+    # Telegram voice memo
+    config.setdefault("distribution", {})["telegram_enabled"] = data.get("telegram_enabled", False)
+    config.setdefault("distribution", {})["telegram_chat_ids"] = data.get("telegram_chat_ids", [])
+    config.setdefault("distribution", {})["telegram_voice_tone"] = data.get("voice_tone", "")
 
     # Agent
     agent = data.get("agent", "")
@@ -732,6 +768,7 @@ def run_wizard() -> None:
         data.update(step_sources())
         data.update(step_agent())
         data.update(step_distribution())
+        data.update(step_telegram_voice())
         data.update(step_schedule())
         step_generate_config(data)
         step_test_run()

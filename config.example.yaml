@@ -116,3 +116,9 @@ distribution:
   github_repo: ""
   obsidian_vault: ""
   digest_format: "markdown"
+  # Telegram voice memo (optional)
+  # Send daily digest as an audio memo to Telegram
+  telegram_enabled: false
+  telegram_chat_ids: []  # List of chat IDs: ["123456789", "987654321"]
+  telegram_voice_tone: ""  # e.g., "casual tech enthusiast", "professional analyst"
+  telegram_top_n: 10  # How many stories to include in voice memo

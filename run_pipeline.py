@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 from datetime import date
 from pathlib import Path
@@ -30,6 +31,7 @@ from src.distribute.claude_config import install_approved_tools
 from src.distribute.digest_generator import generate_digest, save_digest
 from src.distribute.github_publisher import publish_to_github
 from src.distribute.obsidian import save_to_obsidian
+from src.distribute.telegram_voice import generate_voice_memo, send_telegram_memo, save_transcript
 from src.models import NewsItem, RankedItem, TestResult
 from src.pipeline.aggregator import aggregate
 from src.pipeline.ranker import rank_basic, rank_with_llm, save_ranked
@@ -142,6 +144,29 @@ def distribute(
     github_repo = config.get("distribution", {}).get("github_repo", "")
     if github_repo:
         publish_to_github(digest, ranked, test_results, repo=github_repo, run_date=run_date)
+
+    # 5. Send Telegram voice memo (if configured)
+    telegram_enabled = config.get("distribution", {}).get("telegram_enabled", False)
+    if telegram_enabled:
+        try:
+            telegram_chat_ids = config.get("distribution", {}).get("telegram_chat_ids", [])
+            voice_tone = config.get("distribution", {}).get("telegram_voice_tone", "conversational")
+            bot_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+
+            if not bot_token:
+                logger.warning("TELEGRAM_BOT_TOKEN not set. Skipping voice memo.")
+            elif not telegram_chat_ids:
+                logger.warning("No Telegram chat IDs configured. Skipping voice memo.")
+            else:
+                # Generate voice memo
+                audio_bytes, transcript = generate_voice_memo(ranked, test_results, voice_tone)
+                # Save transcript
+                save_transcript(transcript, run_date)
+                # Send via Telegram
+                if send_telegram_memo(audio_bytes, transcript, bot_token, telegram_chat_ids, run_date):
+                    logger.info("Telegram voice memo sent successfully")
+        except Exception as e:
+            logger.exception(f"Failed to send Telegram voice memo: {e}")
 
 
 def print_results(ranked: list[RankedItem]) -> None:
