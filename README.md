@@ -61,7 +61,6 @@ source .venv/bin/activate
 If you installed a specific version via Homebrew, use its full path:
 ```bash
 PY314="$(brew --prefix python@3.14)/bin/python3.14"
-# If you previously created .venv with another Python version, recreate it cleanly:
 rm -rf .venv
 "$PY314" -m venv .venv
 source .venv/bin/activate
@@ -105,6 +104,11 @@ deactivate
 
 ### First Run (Interactive Setup)
 
+Activate the virtual environment first:
+```bash
+source .venv/bin/activate
+```
+
 ```bash
 python run_pipeline.py
 ```
@@ -122,17 +126,28 @@ This generates `config.yaml` and `.env` automatically.
 
 ### Subsequent Runs
 
+Activate the virtual environment first:
 ```bash
-# Scrape + basic ranking
+source .venv/bin/activate
+```
+
+Scrape + basic ranking:
+```bash
 python run_pipeline.py --dry-run
+```
 
-# Scrape + rank with LLM
+Scrape + rank with LLM:
+```bash
 python run_pipeline.py --dry-run --llm
+```
 
-# Full pipeline: scrape, rank, digest (no testing)
+Full pipeline: scrape, rank, digest (no testing):
+```bash
 python run_pipeline.py --digest --llm
+```
 
-# Full pipeline: scrape, rank, test, distribute
+Full pipeline: scrape, rank, test, distribute:
+```bash
 python run_pipeline.py --llm
 ```
 
@@ -163,7 +178,6 @@ Free, runs entirely on your machine.
 
 **Install:**
 ```bash
-# macOS
 brew install ollama
 ollama serve &
 ```
@@ -342,10 +356,7 @@ TypeError: 'NoneType' object is not callable
 
 **Solution:** You're using Python < 3.12. Install Python 3.14:
 ```bash
-# macOS
 brew install python@3.14
-
-# Create venv with the specific version
 PY314="$(brew --prefix python@3.14)/bin/python3.14"
 rm -rf .venv
 "$PY314" -m venv .venv
@@ -369,6 +380,19 @@ python -m pip install -e .
 Verify:
 ```bash
 python -c "import yaml; print('OK')"
+```
+
+### `zsh: command not found: python`
+
+Use `python3`, or activate the virtual environment first:
+```bash
+source .venv/bin/activate
+python run_pipeline.py
+```
+
+Without venv:
+```bash
+python3 run_pipeline.py
 ```
 
 ### `No LLM provider available`
@@ -451,25 +475,34 @@ MIT
 
 ## Quick Command Reference
 
+Setup:
 ```bash
-# Setup
-python run_pipeline.py                          # Interactive wizard
-python -m src.setup_wizard                      # Re-run wizard
+source .venv/bin/activate
+python run_pipeline.py
+python -m src.setup_wizard
+```
 
-# Scraping
-python run_pipeline.py --dry-run                # Scrape + rank (basic)
-python run_pipeline.py --dry-run --llm          # Scrape + rank (LLM)
+Scraping:
+```bash
+python run_pipeline.py --dry-run
+python run_pipeline.py --dry-run --llm
+```
 
-# Full pipeline
-python run_pipeline.py --digest --llm           # Digest only (no testing)
-python run_pipeline.py --llm                    # Full run with testing
+Full pipeline:
+```bash
+python run_pipeline.py --digest --llm
+python run_pipeline.py --llm
+```
 
-# With options
+With options:
+```bash
 python run_pipeline.py --llm --provider ollama --agent opencode
 python run_pipeline.py --dry-run --sources hackernews --llm
+```
 
-# Automation
-bash scheduler/install.sh install               # Start daily scheduler
-bash scheduler/install.sh status                # Check scheduler
-bash scheduler/install.sh run-now               # Trigger immediately
+Automation:
+```bash
+bash scheduler/install.sh install
+bash scheduler/install.sh status
+bash scheduler/install.sh run-now
 ```
