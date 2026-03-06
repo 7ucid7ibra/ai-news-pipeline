@@ -78,6 +78,14 @@ This installs:
 python -c "import yaml; print('OK')"
 ```
 
+### 5. Deactivate the Virtual Environment
+
+When you're done, exit the venv with:
+
+```bash
+deactivate
+```
+
 ---
 
 ## Quick Start
@@ -227,6 +235,40 @@ This:
 bash scheduler/install.sh status      # Check if running
 bash scheduler/install.sh run-now     # Trigger immediately
 bash scheduler/install.sh uninstall   # Remove scheduler
+```
+
+---
+
+## Uninstall / Cleanup
+
+If you're testing on a separate Mac and want to remove everything:
+
+### 1. Uninstall Scheduler (if installed)
+```bash
+bash scheduler/install.sh uninstall
+```
+
+### 2. Deactivate Virtual Environment (if active)
+```bash
+deactivate
+```
+
+### 3. Remove Local Python Environment and Generated Data
+Run from the project root:
+```bash
+rm -rf .venv data output logs
+rm -f config.yaml .env
+```
+
+### 4. (Optional) Remove Editable Package from User Site
+```bash
+pip uninstall -y ai-news-automation
+```
+
+### 5. (Optional) Remove the Repository Folder Entirely
+From the parent directory:
+```bash
+rm -rf ai-news-pipeline
 ```
 
 ---
@@ -412,4 +454,3 @@ bash scheduler/install.sh install               # Start daily scheduler
 bash scheduler/install.sh status                # Check scheduler
 bash scheduler/install.sh run-now               # Trigger immediately
 ```
-
