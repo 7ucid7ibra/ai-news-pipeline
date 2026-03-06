@@ -40,10 +40,14 @@ If you have an older version, install Python 3.14 or 3.13:
 brew install python@3.14
 ```
 
-Then use the full path to the newer Python:
+Then resolve the actual Homebrew path (works on both Apple Silicon and Intel Macs):
 ```bash
-/usr/local/bin/python3.14 --version
+PY314="$(brew --prefix python@3.14)/bin/python3.14"
+"$PY314" --version
 ```
+
+On Apple Silicon this is typically `/opt/homebrew/bin/python3.14`.
+On Intel Macs this is typically `/usr/local/bin/python3.14`.
 
 ### 3. Create Virtual Environment
 
@@ -56,7 +60,8 @@ source .venv/bin/activate
 
 If you installed a specific version via Homebrew, use its full path:
 ```bash
-/usr/local/bin/python3.14 -m venv .venv
+PY314="$(brew --prefix python@3.14)/bin/python3.14"
+"$PY314" -m venv .venv
 source .venv/bin/activate
 ```
 
@@ -333,7 +338,8 @@ TypeError: 'NoneType' object is not callable
 brew install python@3.14
 
 # Create venv with the specific version
-/usr/local/bin/python3.14 -m venv .venv
+PY314="$(brew --prefix python@3.14)/bin/python3.14"
+"$PY314" -m venv .venv
 source .venv/bin/activate
 pip install -e .
 ```
