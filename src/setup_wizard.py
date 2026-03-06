@@ -394,6 +394,35 @@ def step_sources() -> dict:
 
     enabled_sources = [s["key"] for s, e in zip(sources, enabled) if e]
 
+    # Install optional dependencies
+    if "youtube" in enabled_sources and not shutil.which("yt-dlp"):
+        print(f"\n  {WARN} YouTube requires yt-dlp.")
+        if prompt_yn("  Install yt-dlp now?", default=True):
+            print(f"\n  Installing yt-dlp...")
+            result = subprocess.run(
+                [sys.executable, "-m", "pip", "install", "yt-dlp"],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode == 0:
+                print(f"  {CHECK} yt-dlp installed successfully.")
+            else:
+                print(f"  {FAIL} Installation failed. Install manually: pip install yt-dlp")
+
+    if "twitter" in enabled_sources and not shutil.which("playwright"):
+        print(f"\n  {WARN} Twitter requires playwright.")
+        if prompt_yn("  Install playwright now?", default=True):
+            print(f"\n  Installing playwright...")
+            result = subprocess.run(
+                [sys.executable, "-m", "pip", "install", "playwright"],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode == 0:
+                print(f"  {CHECK} Playwright installed successfully.")
+            else:
+                print(f"  {FAIL} Installation failed. Install manually: pip install playwright")
+
     # Reddit credentials (optional)
     reddit_creds: dict[str, str] = {}
     if "reddit" in enabled_sources:
