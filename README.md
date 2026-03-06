@@ -61,17 +61,25 @@ source .venv/bin/activate
 If you installed a specific version via Homebrew, use its full path:
 ```bash
 PY314="$(brew --prefix python@3.14)/bin/python3.14"
+# If you previously created .venv with another Python version, recreate it cleanly:
+rm -rf .venv
 "$PY314" -m venv .venv
 source .venv/bin/activate
 ```
 
 Your prompt should now show `(.venv)`.
 
+Confirm you're using the venv interpreter:
+```bash
+python -V
+python -c "import sys; print(sys.executable)"
+```
+
 ### 4. Install Dependencies
 
 ```bash
-pip install --upgrade pip
-pip install -e .
+python -m pip install --upgrade pip
+python -m pip install -e .
 ```
 
 This installs:
@@ -339,18 +347,23 @@ brew install python@3.14
 
 # Create venv with the specific version
 PY314="$(brew --prefix python@3.14)/bin/python3.14"
+rm -rf .venv
 "$PY314" -m venv .venv
 source .venv/bin/activate
-pip install -e .
+python -m pip install -e .
 ```
 
 ### `ModuleNotFoundError: No module named 'yaml'`
 
-**Solution:** Dependencies weren't installed. Run:
+**Cause:** `pip` and `python` may be pointing to different environments.
+
+**Solution:** Re-activate the venv, verify interpreter path, and install with `python -m pip`:
 ```bash
 source .venv/bin/activate
-pip install --upgrade pip
-pip install -e .
+python -V
+python -c "import sys; print(sys.executable)"
+python -m pip install --upgrade pip
+python -m pip install -e .
 ```
 
 Verify:
