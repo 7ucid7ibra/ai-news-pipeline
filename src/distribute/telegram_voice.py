@@ -14,6 +14,11 @@ from src.models import RankedItem, TestResult
 logger = logging.getLogger(__name__)
 
 ELEVENLABS_API_URL = "https://api.elevenlabs.io/v1/text-to-speech"
+DEFAULT_ELEVENLABS_MODELS = [
+    "eleven_flash_v2_5",
+    "eleven_turbo_v2_5",
+    "eleven_multilingual_v2",
+]
 
 
 def generate_voice_memo(
@@ -178,28 +183,41 @@ def _text_to_speech(text: str, voice_tone: str) -> bytes:
         "Content-Type": "application/json",
     }
 
-    payload = {
-        "text": text,
-        "model_id": "eleven_monolingual_v1",
-        "voice_settings": {
-            "stability": 0.5,
-            "similarity_boost": 0.75,
-        },
-    }
+    configured_model = os.environ.get("ELEVENLABS_MODEL_ID", "").strip()
+    models_to_try = [configured_model] if configured_model else []
+    for model in DEFAULT_ELEVENLABS_MODELS:
+        if model not in models_to_try:
+            models_to_try.append(model)
 
-    try:
-        response = requests.post(
-            f"{ELEVENLABS_API_URL}/{voice_id}",
-            headers=headers,
-            json=payload,
-            timeout=60,
-        )
-        response.raise_for_status()
-        return response.content
+    last_exception: Exception | None = None
+    for model_id in models_to_try:
+        payload = {
+            "text": text,
+            "model_id": model_id,
+            "voice_settings": {
+                "stability": 0.5,
+                "similarity_boost": 0.75,
+            },
+        }
 
-    except requests.exceptions.RequestException as e:
-        logger.error(f"ElevenLabs API error: {e}")
-        raise
+        try:
+            response = requests.post(
+                f"{ELEVENLABS_API_URL}/{voice_id}",
+                headers=headers,
+                json=payload,
+                timeout=60,
+            )
+            response.raise_for_status()
+            logger.info(f"ElevenLabs TTS succeeded with model: {model_id}")
+            return response.content
+        except requests.exceptions.RequestException as e:
+            last_exception = e
+            logger.warning(f"ElevenLabs TTS failed with model {model_id}: {e}")
+
+    logger.error("ElevenLabs API error: all configured models failed")
+    if last_exception:
+        raise last_exception
+    raise RuntimeError("ElevenLabs TTS failed: no model attempts were made")
 
 
 def save_transcript(transcript: str, run_date: date | None = None) -> Path:
