@@ -1,0 +1,118 @@
+schedule:
+  time: "06:00"
+  timezone: "America/New_York"
+
+sources:
+  hackernews:
+    min_score: 10
+    limit: 30
+    ai_keywords:
+      - "AI"
+      - "LLM"
+      - "GPT"
+      - "Claude"
+      - "machine learning"
+      - "deep learning"
+      - "neural"
+      - "transformer"
+      - "diffusion"
+      - "agent"
+      - "RAG"
+      - "fine-tun"
+      - "embedding"
+      - "vector"
+      - "MCP"
+      - "model context protocol"
+      - "Anthropic"
+      - "OpenAI"
+      - "Gemini"
+      - "Mistral"
+      - "open source model"
+      - "Llama"
+      - "Stable Diffusion"
+      - "Midjourney"
+      - "Cursor"
+      - "Copilot"
+
+  reddit:
+    subreddits:
+      - "MachineLearning"
+      - "LocalLLaMA"
+      - "artificial"
+      - "ClaudeAI"
+      - "ChatGPT"
+      - "StableDiffusion"
+    time_filter: "day"
+    limit: 50
+
+  github:
+    languages: ["python", "typescript", "rust"]
+    since: "daily"
+
+  producthunt:
+    topics: ["artificial-intelligence", "developer-tools"]
+
+  rss:
+    feeds:
+      - name: "MIT Technology Review - AI"
+        url: "https://www.technologyreview.com/topic/artificial-intelligence/feed"
+      - name: "The Verge - AI"
+        url: "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml"
+      - name: "VentureBeat - AI"
+        url: "https://venturebeat.com/category/ai/feed/"
+      - name: "TechCrunch - AI"
+        url: "https://techcrunch.com/category/artificial-intelligence/feed/"
+      - name: "OpenAI Blog"
+        url: "https://openai.com/blog/rss.xml"
+      - name: "Google AI Blog"
+        url: "https://blog.google/technology/ai/rss/"
+      - name: "Hugging Face Blog"
+        url: "https://huggingface.co/blog/feed.xml"
+      - name: "Simon Willison"
+        url: "https://simonwillison.net/atom/everything/"
+
+  twitter:
+    accounts:
+      - "AnthropicAI"
+      - "OpenAI"
+      - "GoogleDeepMind"
+      - "ClaudeAI"
+      - "huggingface"
+      - "LangChainAI"
+
+  youtube:
+    channels:
+      - "https://www.youtube.com/@AllAboutAI"
+      - "https://www.youtube.com/@AIJasonZ"
+      - "https://www.youtube.com/@MattVidPro"
+      - "https://www.youtube.com/@WorldofAI"
+      - "https://www.youtube.com/@TwoMinutePapers"
+      - "https://www.youtube.com/@YannicKilcher"
+    max_per_channel: 5
+
+ranking:
+  # LLM provider: "ollama", "lmstudio" (free/local), "anthropic", or "openai"
+  # If not set, auto-detects: Ollama → LM Studio → Anthropic → OpenAI
+  provider: "ollama"
+  # Model override (defaults: ollama=llama3.1, lmstudio=loaded, anthropic=claude-sonnet-4-6, openai=gpt-4o-mini)
+  model: "llama3.1"
+  # Ollama server URL (only needed if not running on default port)
+  # ollama_url: "http://localhost:11434"
+  # LM Studio server URL (only needed if not running on default port)
+  # lmstudio_url: "http://localhost:1234"
+  min_score_threshold: 28
+  max_tools_to_test: 10
+
+testing:
+  # Agent backend: "claude" (Claude Code) or "opencode" (OpenCode)
+  # If not set, auto-detects whichever is installed
+  # agent: "opencode"
+  # Model for OpenCode agent (e.g. "anthropic/claude-sonnet-4-6", "ollama/llama3.1")
+  # agent_model: ""
+  timeout_seconds: 300
+  isolated: true
+
+distribution:
+  github_repo: ""
+  obsidian_vault: ""
+  digest_format: "markdown"
