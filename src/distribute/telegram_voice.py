@@ -14,6 +14,7 @@ from src.models import RankedItem, TestResult
 logger = logging.getLogger(__name__)
 
 ELEVENLABS_API_URL = "https://api.elevenlabs.io/v1/text-to-speech"
+TELEGRAM_AUDIO_CAPTION_LIMIT = 1024
 DEFAULT_ELEVENLABS_MODELS = [
     "eleven_flash_v2_5",
     "eleven_turbo_v2_5",
@@ -105,19 +106,46 @@ def send_telegram_memo(
         try:
             # Send audio file
             url = f"https://api.telegram.org/bot{bot_token}/sendAudio"
-            files = {"audio": ("ai_digest.mp3", io.BytesIO(audio_bytes))}
+            caption = _build_audio_caption(transcript, run_date)
             data = {
                 "chat_id": chat_id,
                 "title": f"AI News Digest — {run_date}",
                 "performer": "AI News Pipeline",
-                "caption": f"📰 Daily AI News Digest\n\n{transcript[:1000]}...",
+                "caption": caption,
             }
 
-            response = requests.post(url, files=files, data=data, timeout=30)
+            response = requests.post(
+                url,
+                files={"audio": ("ai_digest.mp3", io.BytesIO(audio_bytes))},
+                data=data,
+                timeout=30,
+            )
             if response.status_code == 200:
                 logger.info(f"Sent voice memo to Telegram chat: {chat_id}")
                 success_count += 1
             else:
+                # Defensive retry with minimal caption if Telegram still rejects caption length.
+                if response.status_code == 400 and "caption is too long" in response.text.lower():
+                    retry_data = {
+                        "chat_id": chat_id,
+                        "title": f"AI News Digest — {run_date}",
+                        "performer": "AI News Pipeline",
+                        "caption": f"AI News Digest — {run_date}",
+                    }
+                    retry_response = requests.post(
+                        url,
+                        files={"audio": ("ai_digest.mp3", io.BytesIO(audio_bytes))},
+                        data=retry_data,
+                        timeout=30,
+                    )
+                    if retry_response.status_code == 200:
+                        logger.info(f"Sent voice memo to Telegram chat after caption retry: {chat_id}")
+                        success_count += 1
+                        continue
+                    logger.error(
+                        f"Telegram API retry error: {retry_response.status_code} — "
+                        f"{retry_response.text[:200]}"
+                    )
                 logger.error(f"Telegram API error: {response.status_code} — {response.text[:200]}")
         except Exception as e:
             logger.exception(f"Failed to send to Telegram chat {chat_id}: {e}")
@@ -159,6 +187,24 @@ def send_telegram_text(
             logger.exception(f"Failed to send text digest to Telegram chat {chat_id}: {e}")
 
     return success_count > 0
+
+
+def _build_audio_caption(transcript: str, run_date: date) -> str:
+    """Build a Telegram-safe audio caption within Telegram's caption limit."""
+    header = f"AI News Digest — {run_date}\n\n"
+    body = transcript.replace("**", "").strip()
+
+    available = TELEGRAM_AUDIO_CAPTION_LIMIT - len(header)
+    if available <= 0:
+        return header[:TELEGRAM_AUDIO_CAPTION_LIMIT]
+
+    if len(body) > available:
+        if available > 1:
+            body = body[: available - 1].rstrip() + "…"
+        else:
+            body = ""
+
+    return header + body
 
 
 def _text_to_speech(text: str, voice_tone: str) -> bytes:

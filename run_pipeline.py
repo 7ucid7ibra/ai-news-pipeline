@@ -209,22 +209,37 @@ def _build_telegram_text_fallback(
     run_date: date,
     top_n: int = 8,
 ) -> str:
-    """Build a compact text digest for Telegram fallback delivery."""
+    """Build a readable text digest for Telegram delivery."""
     lines = [f"AI News Digest — {run_date}", ""]
 
     passed_count = 0
+    failed_count = 0
+    skipped_count = 0
     if test_results:
         passed_count = sum(1 for r in test_results if r.verdict.value == "pass")
+        failed_count = sum(1 for r in test_results if r.verdict.value == "fail")
+        skipped_count = sum(1 for r in test_results if r.verdict.value == "skip")
     if test_results is not None:
-        lines.append(f"Tested tools: {len(test_results)} | Passed: {passed_count}")
+        lines.append(
+            f"Tools tested: {len(test_results)} | "
+            f"Passed: {passed_count} | Failed: {failed_count} | Skipped: {skipped_count}"
+        )
         lines.append("")
 
     lines.append("Top stories:")
+    lines.append("")
     for idx, r in enumerate(ranked[:top_n], 1):
-        lines.append(f"{idx}. {r.item.title} ({r.total_score}/40)")
+        title = r.item.title.strip()
+        if len(title) > 130:
+            title = title[:127].rstrip() + "..."
+        sources = r.item.raw_data.get("all_sources", [r.item.source.value])
+        source_str = ", ".join(sources) if isinstance(sources, list) else str(sources)
+        lines.append(f"{idx}. {title}")
+        lines.append(f"Score: {r.total_score}/40 | Sources: {source_str}")
         lines.append(r.item.url)
+        lines.append("")
 
-    return "\n".join(lines)
+    return "\n".join(lines).strip()
 
 
 def main():
