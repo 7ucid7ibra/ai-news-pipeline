@@ -162,9 +162,27 @@ def distribute(
         voice_sent = False
         try:
             voice_tone = config.get("distribution", {}).get("telegram_voice_tone", "conversational")
+            telegram_top_n = _as_int(config.get("distribution", {}).get("telegram_top_n", 10), 10)
+            telegram_narration_style = config.get("distribution", {}).get(
+                "telegram_narration_style", "impact_first"
+            )
+            telegram_target_minutes = _as_int(
+                config.get("distribution", {}).get("telegram_target_minutes", 6), 6
+            )
+            telegram_include_scores = _as_bool(
+                config.get("distribution", {}).get("telegram_include_scores", False), False
+            )
 
             # Generate voice memo
-            audio_bytes, transcript = generate_voice_memo(ranked, test_results, voice_tone)
+            audio_bytes, transcript = generate_voice_memo(
+                ranked,
+                test_results,
+                voice_tone,
+                top_n=telegram_top_n,
+                narration_style=telegram_narration_style,
+                target_minutes=telegram_target_minutes,
+                include_scores=telegram_include_scores,
+            )
             # Save transcript
             save_transcript(transcript, run_date)
             # Send via Telegram
@@ -240,6 +258,25 @@ def _build_telegram_text_fallback(
         lines.append("")
 
     return "\n".join(lines).strip()
+
+
+def _as_int(value, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _as_bool(value, default: bool = False) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"1", "true", "yes", "on"}:
+            return True
+        if lowered in {"0", "false", "no", "off"}:
+            return False
+    return default
 
 
 def main():

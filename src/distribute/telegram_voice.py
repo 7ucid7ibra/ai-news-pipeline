@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import logging
 import os
+import re
 import requests
 from datetime import date
 from pathlib import Path
@@ -20,6 +21,7 @@ DEFAULT_ELEVENLABS_MODELS = [
     "eleven_turbo_v2_5",
     "eleven_multilingual_v2",
 ]
+WORDS_PER_MINUTE = 145
 
 
 def generate_voice_memo(
@@ -27,6 +29,9 @@ def generate_voice_memo(
     test_results: list[TestResult] | None,
     voice_tone: str,
     top_n: int = 10,
+    narration_style: str = "impact_first",
+    target_minutes: int = 6,
+    include_scores: bool = False,
 ) -> tuple[bytes, str]:
     """Generate an audio memo summarizing the top stories and tools.
 
@@ -35,44 +40,207 @@ def generate_voice_memo(
         test_results: Results from tool testing (if any)
         voice_tone: Voice/tone style prompt (e.g., "casual tech bro", "professional")
         top_n: How many stories to include (default 10)
+        narration_style: Narrative style for spoken script.
+        target_minutes: Desired audio length target.
+        include_scores: Whether to mention ranking scores in narration.
 
     Returns:
         Tuple of (audio_bytes, transcript_text)
     """
-    # Build the script
-    items_to_read = ranked[:top_n]
-
-    script_lines = [
-        "Hey! Here's your AI news digest for today.",
-        "",
-    ]
-
-    # Add stories
-    script_lines.append("**Top Stories:**")
-    for i, item in enumerate(items_to_read, 1):
-        sources = ", ".join(item.item.raw_data.get("all_sources", [item.item.source.value]))
-        script_lines.append(f"{i}. {item.item.title} from {sources}. Score: {item.total_score} out of 40.")
-
-    # Add tools if any passed testing
-    if test_results:
-        passed_tools = [r for r in test_results if r.verdict.value == "pass"]
-        if passed_tools:
-            script_lines.append("")
-            script_lines.append("**New Tools Worth Checking Out:**")
-            for tool in passed_tools[:3]:  # Top 3 tools
-                script_lines.append(
-                    f"- {tool.item.item.title}: {tool.evaluation}. "
-                    f"Install with: {tool.install_command}"
-                )
-
-    script_lines.append("")
-    script_lines.append("That's it for today. Stay curious!")
-
-    script = "\n".join(script_lines)
+    script = _build_voice_script(
+        ranked=ranked,
+        test_results=test_results,
+        voice_tone=voice_tone,
+        top_n=top_n,
+        narration_style=narration_style,
+        target_minutes=target_minutes,
+        include_scores=include_scores,
+    )
 
     # Convert to speech
     audio_bytes = _text_to_speech(script, voice_tone)
     return audio_bytes, script
+
+
+def _build_voice_script(
+    ranked: list[RankedItem],
+    test_results: list[TestResult] | None,
+    voice_tone: str,
+    top_n: int,
+    narration_style: str,
+    target_minutes: int,
+    include_scores: bool,
+) -> str:
+    """Build a conversational voice script with duration-aware trimming."""
+    style = (narration_style or "impact_first").strip().lower()
+    clamped_top_n = max(1, top_n)
+    clamped_target = max(2, min(12, int(target_minutes)))
+    max_words = (clamped_target + 1) * WORDS_PER_MINUTE
+
+    intro = [
+        f"Hey, here's your AI news briefing for {date.today()}.",
+        "I picked the stories most likely to change what you can build right now.",
+    ]
+    if voice_tone:
+        intro.append(f"I'll keep this {voice_tone}.")
+
+    lines = intro + [""]
+
+    if test_results is not None:
+        passed = sum(1 for r in test_results if r.verdict.value == "pass")
+        skipped = sum(1 for r in test_results if r.verdict.value == "skip")
+        failed = sum(1 for r in test_results if r.verdict.value == "fail")
+        lines.append(
+            f"Quick testing update: {len(test_results)} tools checked, "
+            f"{passed} passed, {failed} failed, and {skipped} skipped."
+        )
+        lines.append("")
+
+    selected = 0
+    for idx, item in enumerate(ranked[:clamped_top_n], 1):
+        block = _build_story_block(
+            item=item,
+            index=idx,
+            narration_style=style,
+            include_scores=include_scores,
+        )
+        proposed = lines + block + [""]
+        if _estimate_words(proposed) > max_words and selected > 0:
+            break
+        lines = proposed
+        selected += 1
+
+    if selected == 0 and ranked:
+        lines.extend(
+            _build_story_block(
+                item=ranked[0],
+                index=1,
+                narration_style=style,
+                include_scores=include_scores,
+            )
+        )
+        lines.append("")
+
+    lines.append(
+        "That's your briefing. If you want, I can also break down one of these stories into an implementation plan."
+    )
+    return "\n".join(lines).strip()
+
+
+def _build_story_block(
+    item: RankedItem,
+    index: int,
+    narration_style: str,
+    include_scores: bool,
+) -> list[str]:
+    """Build one conversational story block: what happened, impact, and use case."""
+    transitions = [
+        "First up",
+        "Next",
+        "Also worth your attention",
+        "Another one to watch",
+        "And this one matters",
+    ]
+    lead = transitions[(index - 1) % len(transitions)]
+
+    title = _sanitize_title(item.item.title)
+    description = _sanitize_sentence(item.item.description, max_words=28)
+    reasoning = _sanitize_sentence(item.reasoning, max_words=24)
+    source = _format_sources(item)
+    tags = item.item.tags[:8]
+
+    if description:
+        what_happened = f"{lead}: {title}. In short, {description}"
+    else:
+        what_happened = f"{lead}: {title}. This came up from {source}."
+
+    impact_basis = reasoning or description
+    if impact_basis:
+        why_it_matters = f"Why it matters: {impact_basis}"
+    else:
+        why_it_matters = (
+            "Why it matters: this signals a shift in available AI capabilities that can change day-to-day workflows."
+        )
+
+    practical_use_case = _infer_use_case(item, tags)
+    use_case = f"Practical use case: {practical_use_case}"
+
+    block = [what_happened, why_it_matters, use_case]
+    if include_scores:
+        block.append(f"Ranking score: {item.total_score} out of 40.")
+    return block
+
+
+def _sanitize_title(raw: str) -> str:
+    """Clean noisy titles for speech output."""
+    title = (raw or "").strip()
+    title = re.sub(r"^\[[^\]]+\]\s*", "", title)
+    title = re.sub(r"\s+", " ", title)
+
+    if ":" in title:
+        left, right = title.split(":", 1)
+        if "/" in left and right.strip():
+            title = right.strip()
+
+    title = title.replace("—", "-").replace("–", "-")
+    return _sanitize_sentence(title, max_words=22)
+
+
+def _sanitize_sentence(text: str, max_words: int = 24) -> str:
+    """Normalize spacing/markdown and trim to a manageable spoken length."""
+    if not text:
+        return ""
+    cleaned = re.sub(r"\s+", " ", text.replace("**", " ").strip())
+    cleaned = re.sub(r"<[^>]+>", " ", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" .")
+    if not cleaned:
+        return ""
+
+    words = cleaned.split()
+    if len(words) > max_words:
+        cleaned = " ".join(words[:max_words]).rstrip(" ,;:.") + "..."
+    if not cleaned.endswith((".", "!", "?")):
+        cleaned += "."
+    return cleaned
+
+
+def _format_sources(item: RankedItem) -> str:
+    sources = item.item.raw_data.get("all_sources", [item.item.source.value])
+    if isinstance(sources, list):
+        return ", ".join(str(s) for s in sources[:3])
+    return str(sources)
+
+
+def _infer_use_case(item: RankedItem, tags: list[str]) -> str:
+    """Infer one concrete use case from title/url/tags without extra LLM calls."""
+    title = item.item.title.lower()
+    url = item.item.url.lower()
+    haystack = " ".join([title, item.item.description.lower(), " ".join(t.lower() for t in tags)])
+
+    if "github.com" in url:
+        return (
+            "Clone the repo in a sandbox, run the quickstart, and test whether it can replace one repetitive part "
+            "of your weekly workflow."
+        )
+    if any(k in haystack for k in ["agent", "mcp", "workflow", "automation"]):
+        return (
+            "Use it to automate one multi-step task, like triaging issues, summarizing docs, or drafting code changes."
+        )
+    if any(k in haystack for k in ["voice", "speech", "audio", "transcription"]):
+        return (
+            "Prototype a voice feature in an existing app and validate latency and quality with real user prompts."
+        )
+    if any(k in haystack for k in ["model", "llm", "gpt", "claude", "gemini"]):
+        return (
+            "Benchmark it on one real prompt set from your work and compare quality, cost, and speed with your current model."
+        )
+    return (
+        "Try a focused one-hour pilot with one teammate to see if it saves time or improves output quality on a real task."
+    )
+
+
+def _estimate_words(lines: list[str]) -> int:
+    return len(" ".join(lines).split())
 
 
 def send_telegram_memo(
